@@ -1,7 +1,7 @@
 # Open-AutoGLM-Android
 
 <p align="center">
-  <img src="app/src/main/res/drawable/ic_launcher.xml" width="100" alt="Logo">
+  <img src="resources/logo.svg" width="100" alt="Logo">
 </p>
 
 <p align="center">
