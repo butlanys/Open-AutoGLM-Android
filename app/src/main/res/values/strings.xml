@@ -4,6 +4,7 @@
     <!-- Navigation -->
     <string name="nav_home">主页</string>
     <string name="nav_settings">设置</string>
+    <string name="nav_logs">日志</string>
     
     <!-- Home Screen -->
     <string name="task_input_hint">输入任务，例如：打开微信搜索附近美食</string>

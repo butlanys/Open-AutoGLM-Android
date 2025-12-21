@@ -7,6 +7,7 @@ import com.autoglm.android.action.ActionResult
 import com.autoglm.android.action.ParsedAction
 import com.autoglm.android.config.SystemPrompts
 import com.autoglm.android.config.TimingConfig
+import com.autoglm.android.data.LogManager
 import com.autoglm.android.device.CurrentAppDetector
 import com.autoglm.android.device.ScreenshotService
 import com.autoglm.android.model.MessageBuilder
@@ -129,6 +130,7 @@ class PhoneAgent(
     ): StepResult {
         stepCount++
         Log.d(TAG, "executeStep: step=$stepCount, isFirst=$isFirst")
+        LogManager.i(TAG, "开始执行步骤 $stepCount")
         _state.value = AgentState.Running(stepCount, agentConfig.maxSteps)
         
         // Capture screen
@@ -136,6 +138,7 @@ class PhoneAgent(
         val screenshotData = ScreenshotService.captureWithDimensions()
         if (screenshotData == null) {
             Log.e(TAG, "executeStep: Failed to capture screenshot")
+            LogManager.e(TAG, "截图失败")
             return StepResult(
                 success = false,
                 finished = true,
@@ -170,11 +173,14 @@ class PhoneAgent(
         val response: ModelResponse
         try {
             Log.d(TAG, "executeStep: Calling model...")
+            LogManager.i(TAG, "调用模型...")
             response = modelClient.request(context)
             Log.d(TAG, "executeStep: Model response received, thinking=${response.thinking.take(100)}, action=${response.action.take(100)}")
+            LogManager.i(TAG, "模型响应: ${response.action.take(50)}...")
             _state.value = AgentState.Running(stepCount, agentConfig.maxSteps, response.thinking)
         } catch (e: Exception) {
             Log.e(TAG, "executeStep: Model error", e)
+            LogManager.e(TAG, "模型调用失败: ${e.message}", e)
             return StepResult(
                 success = false,
                 finished = true,
@@ -189,9 +195,11 @@ class PhoneAgent(
         val action = try {
             ActionParser.parse(response.action).also {
                 Log.d(TAG, "executeStep: Parsed action: ${it.metadata}, params=${it.params}")
+                LogManager.i(TAG, "解析动作: ${it.actionType}")
             }
         } catch (e: Exception) {
             Log.w(TAG, "executeStep: Action parse failed, treating as finish", e)
+            LogManager.w(TAG, "动作解析失败: ${e.message}", e)
             ParsedAction(metadata = "finish", params = mapOf("message" to response.action))
         }
         
@@ -204,9 +212,11 @@ class PhoneAgent(
         val result = try {
             actionHandler.execute(action, screenWidth, screenHeight).also {
                 Log.d(TAG, "executeStep: Action executed, success=${it.success}, shouldFinish=${it.shouldFinish}")
+                LogManager.i(TAG, "动作执行完成: success=${it.success}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "executeStep: Action execution failed", e)
+            LogManager.e(TAG, "动作执行失败: ${e.message}", e)
             ActionResult(success = false, shouldFinish = false, message = e.message)
         }
         
