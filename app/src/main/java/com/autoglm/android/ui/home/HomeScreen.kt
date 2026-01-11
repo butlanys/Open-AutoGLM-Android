@@ -69,6 +69,7 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         // Execute Button
+        val isRunning = uiState.agentState is AgentState.Running
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -80,12 +81,22 @@ fun HomeScreen(
                     taskInput.isNotBlank() && 
                     uiState.agentState is AgentState.Idle
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.btn_start))
+                if (isRunning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.executing))
+                } else {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.btn_start))
+                }
             }
             
-            if (uiState.agentState is AgentState.Running) {
+            if (isRunning) {
                 FilledTonalButton(
                     onClick = viewModel::stopTask,
                     colors = ButtonDefaults.filledTonalButtonColors(
