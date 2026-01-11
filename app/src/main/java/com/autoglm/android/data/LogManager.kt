@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 data class AppLogEntry(
+    val id: Long = System.nanoTime(),
     val timestamp: Long = System.currentTimeMillis(),
     val level: LogLevel = LogLevel.INFO,
     val tag: String,
