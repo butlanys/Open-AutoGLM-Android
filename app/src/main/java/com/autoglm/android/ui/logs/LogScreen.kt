@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.autoglm.android.data.AppLogEntry
+import com.autoglm.android.data.CrashHandler
 import com.autoglm.android.data.LogLevel
 import com.autoglm.android.data.LogManager
 
@@ -36,12 +38,31 @@ fun LogScreen(
     val logs by LogManager.logs.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    var showCrashDialog by remember { mutableStateOf(false) }
+    val hasCrashLogs = remember { CrashHandler.hasCrashLogs() }
     
     // Auto scroll to bottom when new logs arrive
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) {
             listState.animateScrollToItem(logs.size - 1)
         }
+    }
+    
+    if (showCrashDialog) {
+        CrashLogDialog(
+            onDismiss = { showCrashDialog = false },
+            onCopy = {
+                val text = CrashHandler.getCrashLogsAsText()
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("crash_logs", text))
+                Toast.makeText(context, "崩溃日志已复制", Toast.LENGTH_SHORT).show()
+            },
+            onClear = {
+                CrashHandler.clearCrashLogs()
+                Toast.makeText(context, "崩溃日志已清空", Toast.LENGTH_SHORT).show()
+                showCrashDialog = false
+            }
+        )
     }
     
     Scaffold(
@@ -54,6 +75,15 @@ fun LogScreen(
                     }
                 },
                 actions = {
+                    if (hasCrashLogs) {
+                        IconButton(onClick = { showCrashDialog = true }) {
+                            Icon(
+                                Icons.Default.BugReport,
+                                contentDescription = "崩溃日志",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                     IconButton(onClick = {
                         val text = LogManager.getLogsAsText()
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -167,4 +197,79 @@ private fun LogItem(log: AppLogEntry) {
             )
         }
     }
+}
+
+@Composable
+private fun CrashLogDialog(
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    onClear: () -> Unit
+) {
+    val crashLogs = remember { CrashHandler.getCrashLogs() }
+    val scrollState = rememberScrollState()
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("崩溃日志 (${crashLogs.size})") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+            ) {
+                if (crashLogs.isEmpty()) {
+                    Text("无崩溃日志")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(crashLogs) { log ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = log.formattedTime,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = log.content.lines().take(10).joinToString("\n"),
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 10,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    if (log.content.lines().size > 10) {
+                                        Text(
+                                            text = "... (点击复制查看完整日志)",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onClear) {
+                    Text("清空", color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(onClick = onCopy) {
+                    Text("复制全部")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("关闭")
+                }
+            }
+        }
+    )
 }

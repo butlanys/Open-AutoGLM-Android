@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import com.autoglm.android.data.CrashHandler
 
 class AutoGLMApplication : Application() {
     
@@ -17,6 +18,7 @@ class AutoGLMApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        CrashHandler.init(this)
         createNotificationChannel()
     }
     

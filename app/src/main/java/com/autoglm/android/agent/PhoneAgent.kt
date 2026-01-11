@@ -176,7 +176,7 @@ class PhoneAgent(
             LogManager.i(TAG, "调用模型...")
             response = modelClient.request(context)
             Log.d(TAG, "executeStep: Model response received, thinking=${response.thinking.take(100)}, action=${response.action.take(100)}")
-            LogManager.i(TAG, "模型响应: ${response.action.take(50)}...")
+            LogManager.i(TAG, "模型响应: ${response.action}")
             _state.value = AgentState.Running(stepCount, agentConfig.maxSteps, response.thinking)
         } catch (e: Exception) {
             Log.e(TAG, "executeStep: Model error", e)
