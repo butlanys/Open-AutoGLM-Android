@@ -1,7 +1,7 @@
 # Open-AutoGLM-Android
 
 <p align="center">
-  <img src="resources/logo.svg" width="100" alt="Logo">
+  <img src="resources/logo-non-background.svg" width="100" alt="Logo">
 </p>
 
 <p align="center">
@@ -18,6 +18,8 @@
 
 基于 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 的 Android 原生客户端，通过 Shizuku 实现完全本地化的 AI 手机操控，无需电脑连接。
 
+写在前头，此项目受 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 项目启发，项目代码完全由Claude编写，但方案设计百分百原创，我在事先除了参考过Open-AutoGLM、scrcpy、shizuku-api的代码外，没有看过其他开发者的代码。shizuku方案是因为我日常用的多才采用，~~绝不是因为无障碍太容易被app检测到导致被ban号~~
+
 ## ✨ 特性
 
 - 📱 **纯手机端运行** - 无需电脑连接 ADB，通过 Shizuku 直接获取 shell 权限
@@ -27,11 +29,17 @@
 - 🔒 **敏感操作确认** - 支付、删除等操作需用户确认
 - 🛠️ **人工接管** - 登录、验证码等场景支持人工介入
 
-## 📸 截图
+## 📸 UI 截图
 
 | 主页 | 设置页 |
 |:---:|:---:|
-| ![主页](resources/screenshot-1.jpg) | ![设置页](resources/screenshot-2.jpg) |
+| ![主页](resources/screenshot-main.jpg) | ![设置页](resources/screenshot-set.jpg) |
+| 对话中 | 通知栏显示进度 |
+| ![对话中](resources/screenshot-chat.jpg) | ![通知栏显示进度](resources/screenshot-notice.jpg) |
+| 用户对话编辑 | ai对话编辑 |
+| ![用户对话编辑](resources/screenshot-edit-1.jpg) | ![ai对话编辑](resources/screenshot-edit-2.jpg) |
+
+<small><del>感谢Tech_sky的友情支持</del></small>
 
 ## 📋 系统要求
 
