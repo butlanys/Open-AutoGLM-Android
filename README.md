@@ -153,4 +153,5 @@ app/src/main/java/com/autoglm/android/
 
 - [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) - 原始项目
 - [Shizuku](https://github.com/RikkaApps/Shizuku) - Shell 权限框架
+- [scrcpy](https://github.com/Genymobile/scrcpy) - 屏幕捕获技术参考 (Apache License 2.0)
 - [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) - API 转换工具

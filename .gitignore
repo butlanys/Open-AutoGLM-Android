@@ -61,3 +61,6 @@ Open-AutoGLM/
 *.temp
 *.swp
 *~
+
+# AGENT file
+AGENTS.md
