@@ -1,8 +1,8 @@
 package com.autoglm.android.device
 
+import android.util.Base64
 import com.autoglm.android.shizuku.ShizukuExecutor
 import kotlinx.coroutines.delay
-import java.net.URLEncoder
 
 object InputService {
     
@@ -58,9 +58,9 @@ object InputService {
     }
     
     private suspend fun sendText(text: String) {
-        val encodedText = URLEncoder.encode(text, "UTF-8")
+        val base64Text = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         ShizukuExecutor.execute(
-            "am broadcast -a ADB_INPUT_TEXT --es msg '$encodedText' --user 0"
+            "am broadcast -a ADB_INPUT_B64 --es msg '$base64Text' --user 0"
         )
     }
     

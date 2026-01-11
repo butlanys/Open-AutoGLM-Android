@@ -40,6 +40,7 @@ data class StepResult(
 sealed class AgentState {
     object Idle : AgentState()
     data class Running(val stepCount: Int, val maxSteps: Int, val currentThinking: String = "") : AgentState()
+    data class Paused(val stepCount: Int, val maxSteps: Int, val currentThinking: String = "") : AgentState()
     data class WaitingForConfirmation(val message: String) : AgentState()
     data class WaitingForTakeover(val message: String) : AgentState()
     data class Completed(val message: String) : AgentState()
@@ -74,6 +75,11 @@ class PhoneAgent(
     @Volatile
     private var shouldStop = false
     
+    @Volatile
+    private var isPaused = false
+    
+    private val pauseLock = Object()
+    
     suspend fun run(task: String): String {
         reset()
         shouldStop = false
@@ -99,6 +105,17 @@ class PhoneAgent(
         
         // Continue until finished or max steps
         while (stepCount < agentConfig.maxSteps && !shouldStop) {
+            // Check for pause
+            while (isPaused && !shouldStop) {
+                val currentState = _state.value
+                if (currentState is AgentState.Running) {
+                    _state.value = AgentState.Paused(currentState.stepCount, currentState.maxSteps, currentState.currentThinking)
+                }
+                delay(100)
+            }
+            
+            if (shouldStop) break
+            
             result = executeStep(isFirst = false)
             onStepCompleted(result)
             
@@ -115,13 +132,25 @@ class PhoneAgent(
     
     fun stop() {
         shouldStop = true
+        isPaused = false
     }
+    
+    fun pause() {
+        isPaused = true
+    }
+    
+    fun resume() {
+        isPaused = false
+    }
+    
+    fun isPaused(): Boolean = isPaused
     
     fun reset() {
         context.clear()
         stepCount = 0
         _state.value = AgentState.Idle
         shouldStop = false
+        isPaused = false
     }
     
     private suspend fun executeStep(
@@ -158,13 +187,14 @@ class PhoneAgent(
         if (isFirst) {
             context.add(MessageBuilder.createSystemMessage(agentConfig.getEffectiveSystemPrompt()))
             
-            val screenInfo = MessageBuilder.buildScreenInfo(currentApp)
-            val textContent = "$userPrompt\n\n$screenInfo"
+            val textContent = MessageBuilder.buildFirstStepPrompt(userPrompt ?: "", currentApp)
+            LogManager.d(TAG, "=== 第一步 Prompt ===\n$textContent")
             
             context.add(MessageBuilder.createUserMessage(textContent, screenshotBase64))
         } else {
             val screenInfo = MessageBuilder.buildScreenInfo(currentApp)
             val textContent = "** Screen Info **\n\n$screenInfo"
+            LogManager.d(TAG, "=== 步骤 $stepCount Prompt ===\n$textContent")
             
             context.add(MessageBuilder.createUserMessage(textContent, screenshotBase64))
         }
@@ -173,10 +203,12 @@ class PhoneAgent(
         val response: ModelResponse
         try {
             Log.d(TAG, "executeStep: Calling model...")
-            LogManager.i(TAG, "调用模型...")
+            LogManager.i(TAG, "调用模型... (消息数: ${context.size})")
             response = modelClient.request(context)
             Log.d(TAG, "executeStep: Model response received, thinking=${response.thinking.take(100)}, action=${response.action.take(100)}")
-            LogManager.i(TAG, "模型响应: ${response.action}")
+            LogManager.i(TAG, "=== 模型响应 ===")
+            LogManager.d(TAG, "Thinking: ${response.thinking}")
+            LogManager.i(TAG, "Action: ${response.action}")
             _state.value = AgentState.Running(stepCount, agentConfig.maxSteps, response.thinking)
         } catch (e: Exception) {
             Log.e(TAG, "executeStep: Model error", e)

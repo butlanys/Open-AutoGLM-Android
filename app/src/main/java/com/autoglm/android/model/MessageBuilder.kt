@@ -1,5 +1,7 @@
 package com.autoglm.android.model
 
+import com.autoglm.android.config.AppPackages
+import com.autoglm.android.device.InstalledAppsProvider
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -7,6 +9,9 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 
 object MessageBuilder {
+    
+    private var installedAppsCache: String? = null
+    private var useLargeModelMode: Boolean = false
     
     fun createSystemMessage(content: String): Map<String, Any> {
         return mapOf(
@@ -71,5 +76,41 @@ object MessageBuilder {
                 }
             }
         }.toString()
+    }
+    
+    fun setUseLargeModelMode(use: Boolean) {
+        if (useLargeModelMode != use) {
+            useLargeModelMode = use
+            installedAppsCache = null
+        }
+    }
+    
+    fun getInstalledAppsPrompt(): String {
+        if (installedAppsCache == null) {
+            installedAppsCache = if (useLargeModelMode) {
+                val apps = InstalledAppsProvider.getInstalledApps(forceRefresh = true)
+                apps.joinToString(", ") { "${it.name}(${it.packageName})" }
+            } else {
+                AppPackages.APP_PACKAGES.entries.joinToString(", ") { "${it.key}(${it.value})" }
+            }
+        }
+        return installedAppsCache!!
+    }
+    
+    fun buildFirstStepPrompt(task: String, currentApp: String): String {
+        val screenInfo = buildScreenInfo(currentApp)
+        val installedApps = getInstalledAppsPrompt()
+        
+        return """$task
+
+** Screen Info **
+$screenInfo
+
+** Installed Apps **
+$installedApps"""
+    }
+    
+    fun clearCache() {
+        installedAppsCache = null
     }
 }

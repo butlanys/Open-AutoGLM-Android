@@ -11,7 +11,10 @@ import com.autoglm.android.agent.AgentConfig
 import com.autoglm.android.agent.AgentState
 import com.autoglm.android.agent.PhoneAgent
 import com.autoglm.android.data.SettingsRepository
+import com.autoglm.android.device.AppLauncher
+import com.autoglm.android.model.MessageBuilder
 import com.autoglm.android.model.ModelConfig
+import com.autoglm.android.service.AgentForegroundService
 import com.autoglm.android.shizuku.ShizukuManager
 import com.autoglm.android.shizuku.ShizukuState
 import kotlinx.coroutines.flow.*
@@ -79,6 +82,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 lang = settings.language
             )
             
+            MessageBuilder.setUseLargeModelMode(settings.useLargeModelAppList)
+            AppLauncher.setUseLargeModelMode(settings.useLargeModelAppList)
+            
             agent = PhoneAgent(
                 modelConfig = modelConfig,
                 agentConfig = agentConfig,
@@ -103,23 +109,56 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         screenshotBase64 = result.screenshotBase64
                     )
                     _uiState.update { it.copy(logs = it.logs + log) }
+                    
+                    AgentForegroundService.updateProgress(
+                        context = getApplication(),
+                        step = log.step,
+                        maxSteps = agentConfig.maxSteps,
+                        actionType = result.action?.actionType,
+                        thinking = result.thinking
+                    )
                 }
             )
             
             _uiState.update { it.copy(logs = emptyList()) }
             
+            viewModelScope.launch {
+                agent?.state?.collect { agentState ->
+                    _uiState.update { it.copy(agentState = agentState) }
+                }
+            }
+            
+            val task = _taskInput.value
+            AgentForegroundService.start(getApplication(), task, agentConfig.maxSteps)
+            
             try {
-                val task = _taskInput.value
-                agent?.run(task)
+                val result = agent?.run(task)
+                AgentForegroundService.notifyCompleted(getApplication(), result ?: "Task completed")
             } catch (e: Exception) {
                 _uiState.update { it.copy(agentState = AgentState.Failed(e.message ?: "Unknown error")) }
+                AgentForegroundService.notifyFailed(getApplication(), e.message ?: "Unknown error")
+            } finally {
+                _uiState.update { it.copy(agentState = AgentState.Idle) }
             }
         }
     }
     
     fun stopTask() {
         agent?.stop()
+        AgentForegroundService.stop(getApplication())
     }
+    
+    fun pauseTask() {
+        agent?.pause()
+        AgentForegroundService.pause(getApplication())
+    }
+    
+    fun resumeTask() {
+        agent?.resume()
+        AgentForegroundService.resume(getApplication())
+    }
+    
+    fun isAgentPaused(): Boolean = agent?.isPaused() ?: false
     
     fun confirmAction(confirmed: Boolean) {
         confirmationContinuation?.resume(confirmed)

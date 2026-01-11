@@ -132,6 +132,36 @@ fun SettingsScreen(
                 )
             }
             
+            HorizontalDivider()
+            
+            // App List Mode
+            Text(
+                text = stringResource(R.string.settings_app_list_mode),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            
+            Text(
+                text = stringResource(R.string.settings_app_list_mode_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = !uiState.useLargeModelAppList,
+                    onClick = { viewModel.updateUseLargeModelAppList(false) },
+                    label = { Text(stringResource(R.string.settings_app_list_small)) }
+                )
+                FilterChip(
+                    selected = uiState.useLargeModelAppList,
+                    onClick = { viewModel.updateUseLargeModelAppList(true) },
+                    label = { Text(stringResource(R.string.settings_app_list_large)) }
+                )
+            }
+            
             Spacer(modifier = Modifier.height(16.dp))
             
             Button(

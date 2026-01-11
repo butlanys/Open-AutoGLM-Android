@@ -17,6 +17,7 @@ data class SettingsUiState(
     val modelName: String = "autoglm-phone",
     val maxSteps: Int = 100,
     val language: String = "cn",
+    val useLargeModelAppList: Boolean = false,
     val saved: Boolean = false
 )
 
@@ -36,7 +37,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         apiKey = settings.apiKey,
                         modelName = settings.modelName,
                         maxSteps = settings.maxSteps,
-                        language = settings.language
+                        language = settings.language,
+                        useLargeModelAppList = settings.useLargeModelAppList
                     )
                 }
             }
@@ -63,6 +65,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(language = lang) }
     }
     
+    fun updateUseLargeModelAppList(use: Boolean) {
+        _uiState.update { it.copy(useLargeModelAppList = use) }
+    }
+    
     fun save() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -71,6 +77,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             settingsRepository.setModelName(state.modelName)
             settingsRepository.setMaxSteps(state.maxSteps)
             settingsRepository.setLanguage(state.language)
+            settingsRepository.setUseLargeModelAppList(state.useLargeModelAppList)
             _uiState.update { it.copy(saved = true) }
         }
     }

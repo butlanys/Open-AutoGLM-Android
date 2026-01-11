@@ -10,10 +10,14 @@
     <string name="task_input_hint">输入任务，例如：打开微信搜索附近美食</string>
     <string name="btn_start">开始执行</string>
     <string name="btn_stop">停止</string>
+    <string name="btn_pause">暂停</string>
+    <string name="btn_resume">继续</string>
     <string name="execution_log">执行日志</string>
     <string name="step_count">步骤 %1$d / %2$d</string>
+    <string name="step_count_paused">步骤 %1$d / %2$d (已暂停)</string>
     <string name="thinking">思考中...</string>
     <string name="executing">执行中...</string>
+    <string name="paused">已暂停</string>
     <string name="task_completed">任务完成</string>
     <string name="task_failed">任务失败</string>
     <string name="max_steps_reached">已达最大步数</string>
@@ -31,6 +35,10 @@
     <string name="settings_language">语言</string>
     <string name="settings_language_cn">中文</string>
     <string name="settings_language_en">English</string>
+    <string name="settings_app_list_mode">应用列表模式</string>
+    <string name="settings_app_list_mode_hint">小模型模式使用预制应用列表，大模型模式获取设备所有已安装应用</string>
+    <string name="settings_app_list_small">小模型</string>
+    <string name="settings_app_list_large">大模型</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">设置已保存</string>
     
@@ -60,6 +68,12 @@
     <string name="notification_channel_description">显示 Agent 任务执行状态</string>
     <string name="notification_title">正在执行任务</string>
     <string name="notification_stop">停止</string>
+    <string name="notification_pause">暂停</string>
+    <string name="notification_resume">继续</string>
+    <string name="notification_running_title">执行中 %1$d/%2$d</string>
+    <string name="notification_paused_title">已暂停 %1$d/%2$d</string>
+    <string name="notification_completed_title">任务完成</string>
+    <string name="notification_failed_title">任务失败</string>
     
     <!-- Errors -->
     <string name="error_shizuku_required">请先启用 Shizuku</string>

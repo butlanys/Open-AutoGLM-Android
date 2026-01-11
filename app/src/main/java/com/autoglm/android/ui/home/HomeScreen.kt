@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
@@ -70,6 +71,8 @@ fun HomeScreen(
         
         // Execute Button
         val isRunning = uiState.agentState is AgentState.Running
+        val isPaused = uiState.agentState is AgentState.Paused
+        val isActive = isRunning || isPaused
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -96,7 +99,26 @@ fun HomeScreen(
                 }
             }
             
-            if (isRunning) {
+            if (isActive) {
+                // Pause/Resume button
+                FilledTonalButton(
+                    onClick = if (isPaused) viewModel::resumeTask else viewModel::pauseTask,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (isPaused) 
+                            MaterialTheme.colorScheme.primaryContainer 
+                        else 
+                            MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Icon(
+                        if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, 
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(if (isPaused) R.string.btn_resume else R.string.btn_pause))
+                }
+                
+                // Stop button
                 FilledTonalButton(
                     onClick = viewModel::stopTask,
                     colors = ButtonDefaults.filledTonalButtonColors(
@@ -121,6 +143,27 @@ fun HomeScreen(
                 Text(
                     text = stringResource(R.string.step_count, state.stepCount, state.maxSteps),
                     style = MaterialTheme.typography.bodyMedium
+                )
+                if (state.currentThinking.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = state.currentThinking.take(200) + if (state.currentThinking.length > 200) "..." else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            is AgentState.Paused -> {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondary,
+                    trackColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.step_count_paused, state.stepCount, state.maxSteps),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary
                 )
                 if (state.currentThinking.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))

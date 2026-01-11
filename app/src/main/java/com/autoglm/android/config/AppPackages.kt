@@ -82,6 +82,12 @@ object AppPackages {
         "夸克" to "com.quark.browser",
         "百度" to "com.baidu.searchbox",
         "Chrome" to "com.android.chrome",
+        "Edge" to "com.microsoft.emmx",
+        "Microsoft Edge" to "com.microsoft.emmx",
+        "Firefox" to "org.mozilla.firefox",
+        "Safari" to "com.apple.mobilesafari",
+        "Opera" to "com.opera.browser",
+        "Brave" to "com.brave.browser",
         
         // 阅读学习
         "微信读书" to "com.tencent.weread",
@@ -103,7 +109,10 @@ object AppPackages {
     )
     
     fun getPackageName(appName: String): String? {
-        return APP_PACKAGES[appName]
+        return APP_PACKAGES[appName] 
+            ?: APP_PACKAGES.entries.find { 
+                it.key.equals(appName, ignoreCase = true) 
+            }?.value
     }
     
     fun getAppName(packageName: String): String? {
