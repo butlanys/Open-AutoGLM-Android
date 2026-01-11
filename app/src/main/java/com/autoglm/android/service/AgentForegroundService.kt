@@ -27,7 +27,18 @@ class AgentForegroundService : Service() {
         private val _isPaused = MutableStateFlow(false)
         val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
         
+        private val _stopRequested = MutableStateFlow(false)
+        val stopRequested: StateFlow<Boolean> = _stopRequested.asStateFlow()
+        
+        private val _pauseRequested = MutableStateFlow(false)
+        val pauseRequested: StateFlow<Boolean> = _pauseRequested.asStateFlow()
+        
         private var notificationHelper: AgentNotificationHelper? = null
+        
+        fun clearRequests() {
+            _stopRequested.value = false
+            _pauseRequested.value = false
+        }
         
         fun start(context: Context, task: String, maxSteps: Int = 100) {
             val intent = Intent(context, AgentForegroundService::class.java).apply {
@@ -95,6 +106,16 @@ class AgentForegroundService : Service() {
         private var currentStep = 0
         private var currentMaxSteps = 100
         private var currentThinking = ""
+        private var currentConversationId: String? = null
+        private var currentMessageId: String? = null
+        
+        fun setCurrentIds(conversationId: String?, messageId: String?) {
+            currentConversationId = conversationId
+            currentMessageId = messageId
+        }
+        
+        fun getCurrentConversationId(): String? = currentConversationId
+        fun getCurrentMessageId(): String? = currentMessageId
         
         fun notifyCompleted(context: Context, message: String) {
             val helper = notificationHelper ?: AgentNotificationHelper(context).also { notificationHelper = it }
@@ -141,24 +162,27 @@ class AgentForegroundService : Service() {
             }
             
             ACTION_STOP -> {
-                Log.d(TAG, "Stopping service")
-                LogManager.i(TAG, "前台服务停止")
+                Log.d(TAG, "Stop requested via notification")
+                LogManager.i(TAG, "通知栏请求停止任务")
+                _stopRequested.value = true
                 stopForegroundAndService()
             }
             
             ACTION_PAUSE -> {
-                Log.d(TAG, "Pausing service")
-                LogManager.i(TAG, "任务暂停")
+                Log.d(TAG, "Pause requested via notification")
+                LogManager.i(TAG, "通知栏请求暂停任务")
                 _isPaused.value = true
+                _pauseRequested.value = true
                 localNotificationHelper.updateNotification(
                     AgentNotificationState.Paused(currentStep, currentMaxSteps, currentThinking)
                 )
             }
             
             ACTION_RESUME -> {
-                Log.d(TAG, "Resuming service")
-                LogManager.i(TAG, "任务恢复")
+                Log.d(TAG, "Resume requested via notification")
+                LogManager.i(TAG, "通知栏请求恢复任务")
                 _isPaused.value = false
+                _pauseRequested.value = false
                 localNotificationHelper.updateNotification(
                     AgentNotificationState.Running(currentStep, currentMaxSteps, null, currentThinking)
                 )

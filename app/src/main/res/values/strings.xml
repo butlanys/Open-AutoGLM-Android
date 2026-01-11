@@ -5,6 +5,18 @@
     <string name="nav_home">主页</string>
     <string name="nav_settings">设置</string>
     <string name="nav_logs">日志</string>
+    <string name="nav_chat">对话</string>
+    
+    <!-- Chat Screen -->
+    <string name="new_chat">新对话</string>
+    <string name="chat_input_hint">输入消息...</string>
+    <string name="send">发送</string>
+    <string name="no_conversation">选择或创建一个对话</string>
+    <string name="delete_conversation">删除对话</string>
+    <string name="delete_conversation_confirm">确定要删除这个对话吗？</string>
+    <string name="today">今天</string>
+    <string name="yesterday">昨天</string>
+    <string name="earlier">更早</string>
     
     <!-- Home Screen -->
     <string name="task_input_hint">输入任务，例如：打开微信搜索附近美食</string>

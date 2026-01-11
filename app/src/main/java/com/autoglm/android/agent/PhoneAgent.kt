@@ -47,6 +47,12 @@ sealed class AgentState {
     data class Failed(val error: String) : AgentState()
 }
 
+data class HistoryMessage(
+    val role: String,
+    val content: String,
+    val thinking: String? = null
+)
+
 class PhoneAgent(
     private val modelConfig: ModelConfig,
     private val agentConfig: AgentConfig = AgentConfig(),
@@ -69,6 +75,7 @@ class PhoneAgent(
     
     private val context = mutableListOf<Map<String, Any>>()
     private var stepCount = 0
+    private var totalStepCount = 0
     private var screenWidth = 0
     private var screenHeight = 0
     
@@ -80,11 +87,36 @@ class PhoneAgent(
     
     private val pauseLock = Object()
     
+    fun restoreContext(history: List<HistoryMessage>) {
+        context.clear()
+        context.add(MessageBuilder.createSystemMessage(agentConfig.getEffectiveSystemPrompt()))
+        
+        for (msg in history) {
+            when (msg.role) {
+                "user" -> {
+                    context.add(MessageBuilder.createUserMessage(msg.content))
+                }
+                "assistant" -> {
+                    val content = if (msg.thinking != null) {
+                        "<think>${msg.thinking}</think><answer>${msg.content}</answer>"
+                    } else {
+                        msg.content
+                    }
+                    context.add(MessageBuilder.createAssistantMessage(content))
+                }
+            }
+        }
+        
+        Log.d(TAG, "restoreContext: Restored ${history.size} messages, context size: ${context.size}")
+        LogManager.i(TAG, "恢复上下文: ${history.size} 条消息")
+    }
+    
+    fun getTotalStepCount(): Int = totalStepCount
+    
     suspend fun run(task: String): String {
         reset()
         shouldStop = false
         
-        // Get screen dimensions
         val dimensions = CurrentAppDetector.getScreenSize()
         if (dimensions != null) {
             screenWidth = dimensions.first
@@ -94,7 +126,6 @@ class PhoneAgent(
             screenHeight = 2400
         }
         
-        // First step
         var result = executeStep(task, isFirst = true)
         onStepCompleted(result)
         
@@ -103,9 +134,59 @@ class PhoneAgent(
             return result.message ?: "Task completed"
         }
         
-        // Continue until finished or max steps
         while (stepCount < agentConfig.maxSteps && !shouldStop) {
-            // Check for pause
+            while (isPaused && !shouldStop) {
+                val currentState = _state.value
+                if (currentState is AgentState.Running) {
+                    _state.value = AgentState.Paused(currentState.stepCount, currentState.maxSteps, currentState.currentThinking)
+                }
+                delay(100)
+            }
+            
+            if (shouldStop) break
+            
+            result = executeStep(isFirst = false)
+            onStepCompleted(result)
+            
+            if (result.finished) {
+                _state.value = AgentState.Completed(result.message ?: "Task completed")
+                return result.message ?: "Task completed"
+            }
+        }
+        
+        val message = if (shouldStop) "Task stopped by user" else "Max steps reached"
+        _state.value = AgentState.Completed(message)
+        return message
+    }
+    
+    suspend fun continueConversation(newMessage: String): String {
+        shouldStop = false
+        isPaused = false
+        stepCount = 0
+        
+        val dimensions = CurrentAppDetector.getScreenSize()
+        if (dimensions != null) {
+            screenWidth = dimensions.first
+            screenHeight = dimensions.second
+        } else {
+            screenWidth = 1080
+            screenHeight = 2400
+        }
+        
+        val isFirstInContext = context.isEmpty()
+        if (isFirstInContext) {
+            context.add(MessageBuilder.createSystemMessage(agentConfig.getEffectiveSystemPrompt()))
+        }
+        
+        var result = executeStep(newMessage, isFirst = isFirstInContext)
+        onStepCompleted(result)
+        
+        if (result.finished) {
+            _state.value = AgentState.Completed(result.message ?: "Task completed")
+            return result.message ?: "Task completed"
+        }
+        
+        while (stepCount < agentConfig.maxSteps && !shouldStop) {
             while (isPaused && !shouldStop) {
                 val currentState = _state.value
                 if (currentState is AgentState.Running) {
@@ -148,6 +229,14 @@ class PhoneAgent(
     fun reset() {
         context.clear()
         stepCount = 0
+        totalStepCount = 0
+        _state.value = AgentState.Idle
+        shouldStop = false
+        isPaused = false
+    }
+    
+    fun softReset() {
+        stepCount = 0
         _state.value = AgentState.Idle
         shouldStop = false
         isPaused = false
@@ -158,11 +247,11 @@ class PhoneAgent(
         isFirst: Boolean = false
     ): StepResult {
         stepCount++
-        Log.d(TAG, "executeStep: step=$stepCount, isFirst=$isFirst")
-        LogManager.i(TAG, "开始执行步骤 $stepCount")
+        totalStepCount++
+        Log.d(TAG, "executeStep: step=$stepCount, totalStep=$totalStepCount, isFirst=$isFirst")
+        LogManager.i(TAG, "开始执行步骤 $stepCount (总计: $totalStepCount)")
         _state.value = AgentState.Running(stepCount, agentConfig.maxSteps)
         
-        // Capture screen
         delay(TimingConfig.Agent.SCREENSHOT_DELAY)
         val screenshotData = ScreenshotService.captureWithDimensions()
         if (screenshotData == null) {
@@ -183,9 +272,10 @@ class PhoneAgent(
         
         val currentApp = CurrentAppDetector.getCurrentApp()
         
-        // Build messages
         if (isFirst) {
-            context.add(MessageBuilder.createSystemMessage(agentConfig.getEffectiveSystemPrompt()))
+            if (context.isEmpty()) {
+                context.add(MessageBuilder.createSystemMessage(agentConfig.getEffectiveSystemPrompt()))
+            }
             
             val textContent = MessageBuilder.buildFirstStepPrompt(userPrompt ?: "", currentApp)
             LogManager.d(TAG, "=== 第一步 Prompt ===\n$textContent")
@@ -199,7 +289,6 @@ class PhoneAgent(
             context.add(MessageBuilder.createUserMessage(textContent, screenshotBase64))
         }
         
-        // Get model response
         val response: ModelResponse
         try {
             Log.d(TAG, "executeStep: Calling model...")
@@ -223,9 +312,24 @@ class PhoneAgent(
             )
         }
         
-        // Parse action
         val action = try {
-            ActionParser.parse(response.action).also {
+            val parsed = ActionParser.parse(response.action)
+            
+            // If response is empty and parsed as finish with empty message, treat as error and continue
+            if (parsed.isFinish && response.action.isBlank() && response.thinking.isBlank()) {
+                Log.w(TAG, "executeStep: Empty model response, continuing...")
+                LogManager.w(TAG, "模型返回空响应，继续执行")
+                return StepResult(
+                    success = false,
+                    finished = false,
+                    action = null,
+                    thinking = "",
+                    message = "Empty model response",
+                    screenshotBase64 = screenshotBase64
+                )
+            }
+            
+            parsed.also {
                 Log.d(TAG, "executeStep: Parsed action: ${it.metadata}, params=${it.params}")
                 LogManager.i(TAG, "解析动作: ${it.actionType}")
             }
@@ -235,12 +339,10 @@ class PhoneAgent(
             ParsedAction(metadata = "finish", params = mapOf("message" to response.action))
         }
         
-        // Remove image from context to save memory
         if (context.isNotEmpty()) {
             context[context.lastIndex] = MessageBuilder.removeImagesFromMessage(context.last())
         }
         
-        // Execute action
         val result = try {
             actionHandler.execute(action, screenWidth, screenHeight).also {
                 Log.d(TAG, "executeStep: Action executed, success=${it.success}, shouldFinish=${it.shouldFinish}")
@@ -252,7 +354,6 @@ class PhoneAgent(
             ActionResult(success = false, shouldFinish = false, message = e.message)
         }
         
-        // Add assistant response to context
         context.add(
             MessageBuilder.createAssistantMessage(
                 "<think>${response.thinking}</think><answer>${response.action}</answer>"

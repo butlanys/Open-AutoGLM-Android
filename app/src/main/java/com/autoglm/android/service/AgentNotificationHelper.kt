@@ -36,22 +36,26 @@ sealed class AgentNotificationState {
 
 class AgentNotificationHelper(private val context: Context) {
     
-    companion object {
-        private const val TAG = "AgentNotificationHelper"
-        const val NOTIFICATION_ID = 1001
-        const val RESULT_NOTIFICATION_ID = 1002
-        private const val ANDROID_16 = 36
-    }
-    
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     
     private val contentIntent: PendingIntent by lazy {
         PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java),
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_FROM_NOTIFICATION, true)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+    
+    companion object {
+        private const val TAG = "AgentNotificationHelper"
+        const val NOTIFICATION_ID = 1001
+        const val RESULT_NOTIFICATION_ID = 1002
+        private const val ANDROID_16 = 36
+        const val EXTRA_FROM_NOTIFICATION = "from_notification"
     }
     
     private val stopIntent: PendingIntent by lazy {
