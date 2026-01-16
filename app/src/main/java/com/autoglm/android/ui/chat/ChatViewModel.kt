@@ -10,7 +10,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.autoglm.android.agent.AgentConfig
 import com.autoglm.android.agent.AgentState
 import com.autoglm.android.agent.HistoryMessage
+import com.autoglm.android.agent.MultiTaskConfig
+import com.autoglm.android.agent.OrchestratorAgent
+import com.autoglm.android.agent.OrchestratorState
 import com.autoglm.android.agent.PhoneAgent
+import com.autoglm.android.agent.SubTaskResult
+import com.autoglm.android.agent.TaskAnalysis
+import com.autoglm.android.agent.TaskProgress
 import com.autoglm.android.data.ConversationRepository
 import com.autoglm.android.data.SettingsRepository
 import com.autoglm.android.data.db.Conversation
@@ -19,6 +25,7 @@ import com.autoglm.android.data.db.Message
 import com.autoglm.android.data.db.MessageRole
 import com.autoglm.android.data.db.MessageStatus
 import com.autoglm.android.device.AppLauncher
+import com.autoglm.android.display.VirtualDisplayManager
 import com.autoglm.android.model.MessageBuilder
 import com.autoglm.android.model.ModelConfig
 import com.autoglm.android.service.AgentForegroundService
@@ -36,7 +43,29 @@ data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val agentState: AgentState = AgentState.Idle,
     val currentExecutionSteps: List<ExecutionStep> = emptyList(),
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    // Orchestrator mode
+    val orchestratorState: OrchestratorState = OrchestratorState.Idle,
+    val taskAnalysis: TaskAnalysis? = null,
+    val subTaskProgress: Map<String, TaskProgress> = emptyMap(),
+    val orchestratorResults: List<SubTaskResult> = emptyList(),
+    val orchestratorSummary: String = "",
+    val flowDiagram: String = "",
+    // Settings
+    val showAdvancedSettings: Boolean = false,
+    val virtualDisplaySupported: Boolean = false,
+    val confirmationMessage: String? = null
+)
+
+data class AdvancedSettings(
+    val useOrchestrator: Boolean = false,
+    val useAdvancedModel: Boolean = false,
+    val advancedModelUrl: String = "",
+    val advancedModelApiKey: String = "",
+    val advancedModelName: String = "",
+    val enableVirtualDisplays: Boolean = true,
+    val maxConcurrentTasks: Int = 3,
+    val autoDecideMultiTask: Boolean = true
 )
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -55,6 +84,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val inputText: StateFlow<String> = _inputText.asStateFlow()
     
     private var agent: PhoneAgent? = null
+    private var orchestratorAgent: OrchestratorAgent? = null
     private var confirmationContinuation: Continuation<Boolean>? = null
     private var takeoverContinuation: Continuation<Unit>? = null
     private var currentMessageId: String? = null
@@ -62,10 +92,76 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private var stepsJob: Job? = null
     private var serviceObserverJob: Job? = null
     
+    private val _advancedSettings = MutableStateFlow(AdvancedSettings())
+    val advancedSettings: StateFlow<AdvancedSettings> = _advancedSettings.asStateFlow()
+    
     init {
         ShizukuManager.init()
         observeServiceCommands()
         restoreRunningTaskIfNeeded()
+        loadAdvancedSettings()
+        observeShizukuAndCheckVirtualDisplay()
+    }
+    
+    private fun loadAdvancedSettings() {
+        viewModelScope.launch {
+            settingsRepository.orchestratorSettings.collect { orchSettings ->
+                _advancedSettings.update { current ->
+                    current.copy(
+                        useAdvancedModel = orchSettings.useAdvancedModel,
+                        advancedModelUrl = orchSettings.advancedModelUrl,
+                        advancedModelApiKey = orchSettings.advancedModelApiKey,
+                        advancedModelName = orchSettings.advancedModelName,
+                        enableVirtualDisplays = orchSettings.enableVirtualDisplays,
+                        maxConcurrentTasks = orchSettings.maxConcurrentTasks,
+                        autoDecideMultiTask = orchSettings.autoDecideMultiTask
+                    )
+                }
+            }
+        }
+    }
+    
+    private fun observeShizukuAndCheckVirtualDisplay() {
+        viewModelScope.launch {
+            // Wait for Shizuku to be ready before checking virtual display support
+            shizukuState.first { it.isReady }
+            checkVirtualDisplaySupport()
+        }
+    }
+    
+    private suspend fun checkVirtualDisplaySupport() {
+        val supported = VirtualDisplayManager.checkVirtualDisplaySupport()
+        _uiState.update { it.copy(virtualDisplaySupported = supported) }
+        if (!supported) {
+            _advancedSettings.update { it.copy(enableVirtualDisplays = false) }
+        }
+    }
+    
+    fun updateAdvancedSettings(settings: AdvancedSettings) {
+        _advancedSettings.value = settings
+        viewModelScope.launch {
+            settingsRepository.saveOrchestratorSettings(
+                SettingsRepository.OrchestratorSettings(
+                    useAdvancedModel = settings.useAdvancedModel,
+                    advancedModelUrl = settings.advancedModelUrl,
+                    advancedModelApiKey = settings.advancedModelApiKey,
+                    advancedModelName = settings.advancedModelName,
+                    enableVirtualDisplays = settings.enableVirtualDisplays,
+                    maxConcurrentTasks = settings.maxConcurrentTasks,
+                    autoDecideMultiTask = settings.autoDecideMultiTask
+                )
+            )
+        }
+    }
+    
+    fun toggleAdvancedSettings() {
+        _uiState.update { it.copy(showAdvancedSettings = !it.showAdvancedSettings) }
+    }
+    
+    fun dismissConfirmation() {
+        confirmationContinuation?.resume(false)
+        confirmationContinuation = null
+        _uiState.update { it.copy(confirmationMessage = null) }
     }
     
     private fun restoreRunningTaskIfNeeded() {
@@ -167,6 +263,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val text = _inputText.value.trim()
         if (text.isBlank()) return
         
+        val advSettings = _advancedSettings.value
+        if (advSettings.useOrchestrator) {
+            executeWithOrchestrator(text)
+        } else {
+            executeNormalTask(text)
+        }
+    }
+    
+    private fun executeNormalTask(text: String) {
         viewModelScope.launch {
             val settings = settingsRepository.settings.first()
             
@@ -318,12 +423,150 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    private fun executeWithOrchestrator(text: String) {
+        viewModelScope.launch {
+            val settings = settingsRepository.settings.first()
+            val advSettings = _advancedSettings.value
+            
+            val apiKey = if (advSettings.useAdvancedModel && advSettings.advancedModelApiKey.isNotBlank()) {
+                advSettings.advancedModelApiKey
+            } else {
+                settings.apiKey
+            }
+            
+            if (apiKey.isBlank()) {
+                _uiState.update { it.copy(agentState = AgentState.Failed("请先配置API密钥")) }
+                return@launch
+            }
+            
+            var conversation = _uiState.value.currentConversation
+            if (conversation == null) {
+                conversation = conversationRepository.createConversation()
+                loadConversation(conversation.id)
+            }
+            
+            conversationRepository.addUserMessage(conversation.id, text)
+            _inputText.value = ""
+            
+            _uiState.update {
+                it.copy(
+                    orchestratorState = OrchestratorState.Analyzing(text),
+                    taskAnalysis = null,
+                    subTaskProgress = emptyMap(),
+                    orchestratorResults = emptyList(),
+                    orchestratorSummary = "",
+                    flowDiagram = ""
+                )
+            }
+            
+            val orchestratorModelConfig = if (advSettings.useAdvancedModel && 
+                                               advSettings.advancedModelApiKey.isNotBlank()) {
+                ModelConfig(
+                    baseUrl = advSettings.advancedModelUrl.ifBlank { settings.apiUrl },
+                    apiKey = advSettings.advancedModelApiKey,
+                    modelName = advSettings.advancedModelName.ifBlank { settings.modelName },
+                    lang = settings.language
+                )
+            } else {
+                ModelConfig(
+                    baseUrl = settings.apiUrl,
+                    apiKey = settings.apiKey,
+                    modelName = settings.modelName,
+                    lang = settings.language
+                )
+            }
+            
+            val workerModelConfig = ModelConfig(
+                baseUrl = settings.apiUrl,
+                apiKey = settings.apiKey,
+                modelName = settings.modelName,
+                lang = settings.language
+            )
+            
+            val displaySize = VirtualDisplayManager.getDefaultDisplaySize()
+            val density = VirtualDisplayManager.getDefaultDisplayDensity()
+            
+            val multiTaskConfig = MultiTaskConfig(
+                maxConcurrentTasks = advSettings.maxConcurrentTasks,
+                enableVirtualDisplays = advSettings.enableVirtualDisplays && _uiState.value.virtualDisplaySupported,
+                displayWidth = displaySize?.x ?: 1080,
+                displayHeight = displaySize?.y ?: 2340,
+                displayDensity = density,
+                lang = settings.language
+            )
+            
+            orchestratorAgent = OrchestratorAgent(
+                orchestratorModelConfig = orchestratorModelConfig,
+                workerModelConfig = workerModelConfig,
+                multiTaskConfig = multiTaskConfig,
+                onStateChange = { state ->
+                    _uiState.update { it.copy(orchestratorState = state) }
+                },
+                onSubTaskProgress = { progress ->
+                    _uiState.update { state ->
+                        state.copy(
+                            subTaskProgress = state.subTaskProgress + (progress.taskId to progress)
+                        )
+                    }
+                },
+                onConfirmationRequired = { message ->
+                    suspendCoroutine { continuation ->
+                        _uiState.update { it.copy(confirmationMessage = message) }
+                        confirmationContinuation = continuation
+                    }
+                }
+            )
+            
+            try {
+                val result = orchestratorAgent?.execute(text)
+                
+                if (result != null) {
+                    _uiState.update {
+                        it.copy(
+                            orchestratorResults = result.subTaskResults,
+                            orchestratorSummary = result.summary,
+                            flowDiagram = result.flowDiagram,
+                            orchestratorState = if (result.success) 
+                                OrchestratorState.Completed(result.summary, result.flowDiagram) 
+                            else 
+                                OrchestratorState.Failed(result.summary)
+                        )
+                    }
+                    
+                    conversationRepository.addAssistantMessage(
+                        conversationId = conversation.id,
+                        content = result.summary,
+                        status = MessageStatus.COMPLETED
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(orchestratorState = OrchestratorState.Failed(e.message ?: "Unknown error")) 
+                }
+            } finally {
+                viewModelScope.launch {
+                    VirtualDisplayManager.destroyAllDisplays()
+                }
+            }
+        }
+    }
+    
     fun stopTask() {
         agent?.stop()
+        orchestratorAgent?.stop()
+        viewModelScope.launch {
+            VirtualDisplayManager.destroyAllDisplays()
+        }
         AgentForegroundService.stop(getApplication())
         viewModelScope.launch {
             currentMessageId?.let { messageId ->
                 conversationRepository.updateMessageStatus(messageId, MessageStatus.FAILED)
+            }
+            _uiState.update { 
+                it.copy(
+                    orchestratorState = OrchestratorState.Idle,
+                    subTaskProgress = emptyMap()
+                ) 
             }
         }
     }

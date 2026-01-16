@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.autoglm.android.data.SettingsRepository
+import com.autoglm.android.display.VirtualDisplayManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -84,6 +85,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     
     fun resetSaved() {
         _uiState.update { it.copy(saved = false) }
+    }
+    
+    fun clearVirtualDisplays() {
+        viewModelScope.launch {
+            VirtualDisplayManager.destroyAllDisplays()
+            VirtualDisplayManager.clearOverlayDisplays()
+        }
     }
     
     companion object {

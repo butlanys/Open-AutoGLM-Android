@@ -11,14 +11,20 @@ import androidx.navigation.compose.rememberNavController
 import com.autoglm.android.ui.chat.ChatScreen
 import com.autoglm.android.ui.chat.ChatViewModel
 import com.autoglm.android.ui.chat.ConversationDrawer
+import com.autoglm.android.ui.chat.MultiTaskScreen
+import com.autoglm.android.ui.chat.OrchestratorScreen
+import com.autoglm.android.ui.display.VirtualDisplayScreen
 import com.autoglm.android.ui.logs.LogScreen
 import com.autoglm.android.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     object Chat : Screen("chat")
+    object MultiTask : Screen("multitask")
+    object Orchestrator : Screen("orchestrator")
     object Settings : Screen("settings")
     object Logs : Screen("logs")
+    object VirtualDisplay : Screen("virtual_display")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +37,18 @@ fun AutoGLMApp() {
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
     val uiState by chatViewModel.uiState.collectAsState()
     val conversations by chatViewModel.allConversations.collectAsState(initial = emptyList())
+    
+    // Track current route to control drawer
+    val currentRoute by navController.currentBackStackEntryFlow
+        .collectAsState(initial = navController.currentBackStackEntry)
+    val isOnChatScreen = currentRoute?.destination?.route == Screen.Chat.route
+    
+    // Close drawer when navigating away from chat
+    LaunchedEffect(isOnChatScreen) {
+        if (!isOnChatScreen && drawerState.isOpen) {
+            drawerState.close()
+        }
+    }
     
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -51,7 +69,7 @@ fun AutoGLMApp() {
                 }
             )
         },
-        gesturesEnabled = drawerState.isOpen
+        gesturesEnabled = isOnChatScreen && drawerState.isOpen
     ) {
         NavHost(
             navController = navController,
@@ -65,17 +83,37 @@ fun AutoGLMApp() {
                     },
                     onNavigateToSettings = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    onNavigateToMultiTask = {
+                        navController.navigate(Screen.MultiTask.route)
+                    },
+                    onNavigateToOrchestrator = {
+                        navController.navigate(Screen.Orchestrator.route)
                     }
+                )
+            }
+            composable(Screen.MultiTask.route) {
+                MultiTaskScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Orchestrator.route) {
+                OrchestratorScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToLogs = { navController.navigate(Screen.Logs.route) },
+                    onNavigateToVirtualDisplay = { navController.navigate(Screen.VirtualDisplay.route) },
                     onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Logs.route) {
                 LogScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.VirtualDisplay.route) {
+                VirtualDisplayScreen(onNavigateBack = { navController.popBackStack() })
             }
         }
     }

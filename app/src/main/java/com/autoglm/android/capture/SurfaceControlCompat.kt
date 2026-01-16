@@ -106,20 +106,52 @@ object SurfaceControlCompat {
     /**
      * Get the built-in display token.
      * Derived from scrcpy's SurfaceControl.getBuiltInDisplay() implementation.
+     * Updated for Android 15 compatibility.
      */
     fun getBuiltInDisplay(): IBinder? {
         val clazz = surfaceControlClass ?: return null
         
+        // Try multiple methods in order of preference
+        // Android 15+ removed getInternalDisplayToken, use getPhysicalDisplayToken instead
+        return tryGetBuiltInDisplayViaPhysicalIds(clazz)
+            ?: tryGetInternalDisplayToken(clazz)
+            ?: tryGetBuiltInDisplayLegacy(clazz)
+    }
+    
+    private fun tryGetBuiltInDisplayViaPhysicalIds(clazz: Class<*>): IBinder? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val method = clazz.getMethod("getInternalDisplayToken")
-                method.invoke(null) as? IBinder
-            } else {
-                val method = clazz.getMethod("getBuiltInDisplay", Int::class.javaPrimitiveType)
-                method.invoke(null, 0) as? IBinder
-            }
+            val getIdsMethod = clazz.getMethod("getPhysicalDisplayIds")
+            val ids = getIdsMethod.invoke(null) as? LongArray
+            if (ids == null || ids.isEmpty()) return null
+            
+            val getTokenMethod = clazz.getMethod("getPhysicalDisplayToken", Long::class.javaPrimitiveType)
+            getTokenMethod.invoke(null, ids[0]) as? IBinder
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get built-in display", e)
+            Log.d(TAG, "getPhysicalDisplayToken approach failed: ${e.message}")
+            null
+        }
+    }
+    
+    private fun tryGetInternalDisplayToken(clazz: Class<*>): IBinder? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        
+        return try {
+            val method = clazz.getMethod("getInternalDisplayToken")
+            method.invoke(null) as? IBinder
+        } catch (e: Exception) {
+            Log.d(TAG, "getInternalDisplayToken not available: ${e.message}")
+            null
+        }
+    }
+    
+    private fun tryGetBuiltInDisplayLegacy(clazz: Class<*>): IBinder? {
+        return try {
+            val method = clazz.getMethod("getBuiltInDisplay", Int::class.javaPrimitiveType)
+            method.invoke(null, 0) as? IBinder
+        } catch (e: Exception) {
+            Log.d(TAG, "getBuiltInDisplay legacy not available: ${e.message}")
             null
         }
     }
