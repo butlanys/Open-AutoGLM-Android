@@ -163,6 +163,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    fun clearAllConversations() {
+        viewModelScope.launch {
+            conversationRepository.deleteAllConversations()
+            _uiState.update { it.copy(currentConversation = null, messages = emptyList()) }
+        }
+    }
+    
     fun sendMessage() {
         val text = _inputText.value.trim()
         if (text.isBlank()) return

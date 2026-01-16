@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,9 +29,11 @@ fun ConversationDrawer(
     onNewConversation: () -> Unit,
     onSelectConversation: (String) -> Unit,
     onDeleteConversation: (String) -> Unit,
+    onClearAllConversations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var deleteDialogConversation by remember { mutableStateOf<Conversation?>(null) }
+    var showClearAllDialog by remember { mutableStateOf(false) }
     
     ModalDrawerSheet(modifier = modifier) {
         Column(
@@ -79,6 +82,24 @@ fun ConversationDrawer(
                     }
                 }
             }
+            
+            if (conversations.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                OutlinedButton(
+                    onClick = { showClearAllDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(Icons.Default.DeleteSweep, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.clear_all_conversations))
+                }
+            }
         }
     }
     
@@ -99,6 +120,29 @@ fun ConversationDrawer(
             },
             dismissButton = {
                 TextButton(onClick = { deleteDialogConversation = null }) {
+                    Text(stringResource(R.string.confirm_no))
+                }
+            }
+        )
+    }
+    
+    if (showClearAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearAllDialog = false },
+            title = { Text(stringResource(R.string.clear_all_conversations)) },
+            text = { Text(stringResource(R.string.clear_all_conversations_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onClearAllConversations()
+                        showClearAllDialog = false
+                    }
+                ) {
+                    Text(stringResource(R.string.confirm_yes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllDialog = false }) {
                     Text(stringResource(R.string.confirm_no))
                 }
             }

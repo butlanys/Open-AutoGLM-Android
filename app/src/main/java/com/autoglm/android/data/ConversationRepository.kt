@@ -49,6 +49,10 @@ class ConversationRepository(context: Context) {
         conversationDao.archiveConversation(id)
     }
 
+    suspend fun deleteAllConversations() {
+        conversationDao.deleteAllConversations()
+    }
+
     fun getMessages(conversationId: String): Flow<List<Message>> {
         return messageDao.getMessagesByConversationId(conversationId)
     }

@@ -48,6 +48,9 @@ fun AutoGLMApp() {
                 },
                 onDeleteConversation = { id ->
                     chatViewModel.deleteConversation(id)
+                },
+                onClearAllConversations = {
+                    chatViewModel.clearAllConversations()
                 }
             )
         },

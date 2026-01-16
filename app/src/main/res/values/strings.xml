@@ -17,6 +17,8 @@
     <string name="today">今天</string>
     <string name="yesterday">昨天</string>
     <string name="earlier">更早</string>
+    <string name="clear_all_conversations">清除全部</string>
+    <string name="clear_all_conversations_confirm">确定要清除所有对话记录吗？此操作不可撤销。</string>
     
     <!-- Home Screen -->
     <string name="task_input_hint">输入任务，例如：打开微信搜索附近美食</string>
